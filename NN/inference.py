@@ -8,13 +8,13 @@ import joblib
 def main():
     std_scaler = joblib.load(os.path.dirname(__file__) + '/scaler.joblib')
     val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d_val.csv')
-    X_val, y_val, _ = get_normalized_sequences(val_df, 10, 1, std_scaler)
+    X_val, y_val, _ = get_normalized_sequences(val_df, 50, 1, std_scaler)
     timestamps = X_val[:, :, 1]
     X_val = X_val[:, :, 2:].astype(float)
     y_val = y_val.astype(float)
 
     model = create_model()
-    model.load_weights(os.path.dirname(__file__) + '/logs/checkpoint-1d-10-back')
+    model.load_weights(os.path.dirname(__file__) + '/logs/checkpoint-1d-50-back')
     model.evaluate(X_val, y_val)
 
     y_pred = model.predict(X_val)[:, 0]
