@@ -9,7 +9,7 @@ import datetime
 import os
 
 
-SEQUENCE_LEN = 10
+SEQUENCE_LEN = 50
 
 
 def load_data(path: str):
@@ -40,8 +40,8 @@ def get_normalized_sequences(df, sequence_len, step=1, scaler=None):
 
 def create_model():
     model = Sequential([
-        LSTM(64, input_shape=(SEQUENCE_LEN, 4)),
-        Dense(32, activation='relu'),
+        LSTM(64, return_sequences=True, input_shape=(SEQUENCE_LEN, 4)),
+        LSTM(64),
         Dense(1)
     ])
     model.compile(optimizer='adam', loss='mse', metrics=['mae', 'msle'])
@@ -68,7 +68,7 @@ def main():
     model.fit(X_train, y_train, epochs=2000, shuffle=True, validation_data=(X_val, y_val),
               callbacks=[
                   TensorBoard(log_dir, histogram_freq=1),
-                  EarlyStopping(patience=50),
+                  EarlyStopping(patience=10),
                   ModelCheckpoint(os.path.dirname(__file__) + '/logs/checkpoint'
                                   + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")),
               ])
