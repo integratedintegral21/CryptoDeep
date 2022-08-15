@@ -49,7 +49,7 @@ def create_model():
 
 
 def main():
-    train_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d.csv')
+    train_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_1h.csv')
     X_train, y_train, scaler = get_normalized_sequences(train_df, SEQUENCE_LEN)
     # Save scaler
     joblib.dump(scaler, os.path.dirname(__file__) + '/scaler.joblib')
@@ -57,7 +57,7 @@ def main():
     X_train = X_train[:, :, 2:].astype(float)
     y_train = y_train.astype(float)
 
-    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d_val.csv')
+    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_1h_val.csv')
     X_val, y_val, _ = get_normalized_sequences(val_df, SEQUENCE_LEN, 1, scaler)
     X_val = X_val[:, :, 2:].astype(float)
     y_val = y_val.astype(float)
