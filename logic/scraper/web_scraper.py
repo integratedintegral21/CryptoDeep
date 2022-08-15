@@ -70,7 +70,7 @@ class CryptodatadownloadScraper(WebScraper):
         return result
 
     def __update_cache(self, crypto, currency):
-        download_link = 'https://www.cryptodatadownload.com/cdd/Binance_{0}{1}_d.csv'.format(crypto, currency)
+        download_link = 'https://www.cryptodatadownload.com/cdd/Binance_{0}{1}_1h.csv'.format(crypto, currency)
         # Get the current latest file
         latest_file = self.__get_latest_cache_file(crypto, currency)
         print(download_link)
