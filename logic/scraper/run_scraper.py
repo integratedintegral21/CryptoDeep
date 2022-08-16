@@ -1,7 +1,7 @@
 import datetime
 import os.path
 
-from logic.scraper.web_scraper import CryptodatadownloadScraper
+from web_scraper import CryptodatadownloadScraper
 
 
 def main():
