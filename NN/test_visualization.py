@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import joblib
 from sklearn.metrics import mean_absolute_error, mean_squared_log_error
+from tensorflow.python.keras.models import load_model
 
 
 def main():
@@ -14,8 +15,7 @@ def main():
     X_val = X_val[:, :, 2:].astype(float)
     y_val = y_val.astype(float)
 
-    model = create_model()
-    model.load_weights(os.path.dirname(__file__) + '/logs/checkpoint-1h-50-back')
+    model = load_model(os.path.dirname(__file__) + '/logs/checkpoint-1h-50-back')
     model.evaluate(X_val, y_val)
 
     y_pred = model.predict(X_val)[:, 0]
