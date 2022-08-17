@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import glob
 
@@ -32,100 +33,47 @@ class CoinmarketcapScraper(WebScraper):
         self.driver_.get('https://coinmarketcap.com')
 
 
-class CryptodatadownloadScraper(WebScraper):
-    def __try_create_cache(self):
-        if not os.path.isdir(self.cache_path):
-            os.mkdir(self.cache_path)
+class CryptodatadownloadCache:
+    def __init__(self, cache_path, crypto, currency, update_period=datetime.timedelta(seconds=0)):
+        self.__cache_dir_path = cache_path
+        self.__update_period = update_period
+        self.__cache_file = None
+        self.__last_update = None
+        self.crypto = crypto
+        self.currency = currency
+        if not os.path.isdir(self.__cache_dir_path):
+            os.mkdir(self.__cache_dir_path)
+        self.__update_cache()
+        logging.debug("Created cache at {0}. Symbols: {1}/{2}. Update period:{3}. Last update: {4}.".format(
+            self.__cache_dir_path,
+            self.crypto,
+            self.currency,
+            self.__update_period,
+            self.__last_update))
 
-    def __get_latest_cache_file(self, crypto, currency) -> str:
-        latest_file = None
-        # Get the latest file
-        latest_timestamp = datetime.datetime(1900, 1, 1, 0, 0, 0)
-        for filepath in glob.glob(os.path.join(self.cache_path, 'data_' + crypto + currency + '*.csv')):
-            timestamp_str = filepath.split('_')[-1].split('.')[0]
-            data_timestamp = datetime.datetime.strptime(timestamp_str, '%Y-%m-%d-%H-%M-%S')
-            if data_timestamp > latest_timestamp:
-                latest_timestamp = data_timestamp
-                latest_file = filepath
-        return latest_file
-
-    def __get_last_cache_update(self, crypto, currency):
-        filepath = self.__get_latest_cache_file(crypto, currency)
-        if filepath is None:
-            return datetime.datetime(1900, 1, 1, 0, 0, 0)
-        timestamp_str = filepath.split('_')[-1].split('.')[0]
-        return datetime.datetime.strptime(timestamp_str, '%Y-%m-%d-%H-%M-%S')
-
-    def __lookup_cache(self, timestamp, crypto, currency) -> crypto_record.CryptoRecord:
-        latest_file = self.__get_latest_cache_file(crypto, currency)
-        # No files found, return a miss
-        if latest_file is None:
-            return None
-
-        # Retrieve the record by timestamp
-        df = pd.read_csv(latest_file)
-        record = df.loc[df['date'] == timestamp.strftime("%Y-%m-%d %H:%M:%S")]
-        # A miss
-        if len(record) == 0:
-            return None
-        result = crypto_record.CryptoRecord(datetime.datetime.strptime(record.iloc[0]['date'], '%Y-%m-%d %H:%M:%S'),
-                                            record.iloc[0]['open'],
-                                            record.iloc[0]['high'],
-                                            record.iloc[0]['low'],
-                                            record.iloc[0]['close'],
-                                            crypto,
-                                            currency)
-        return result
-
-    def __get_records_until_from_cache(self, end_timestamp, crypto, currency, n_records):
-        latest_file = self.__get_latest_cache_file(crypto, currency)
-        # No files found, return a miss
-        if latest_file is None:
-            return []
-        df = pd.read_csv(latest_file)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S'))
-        df.sort_values(by='unix', inplace=True)
-        first_earlier_i = 0
-        for _, row in df.iterrows():
-            if row['date'] <= end_timestamp:
-                break
-            first_earlier_i += 1
-        i = 0
-        results = []
-        while i < n_records:
-            record = df.iloc[first_earlier_i + i]
-            result = crypto_record.CryptoRecord(record['date'],
-                                                record['open'],
-                                                record['high'],
-                                                record['low'],
-                                                record['close'],
-                                                crypto,
-                                                currency)
-            results.append(result)
-            i += 1
-        return results
-
-    def __update_cache(self, crypto, currency):
-        download_link = 'https://www.cryptodatadownload.com/cdd/Binance_{0}{1}_1h.csv'.format(crypto, currency)
-        # Get the current latest file
-        latest_file = self.__get_latest_cache_file(crypto, currency)
-        print(download_link)
+    def __update_cache(self):
+        logging.info("Updating cache at {0}. Symbols: {1}/{2}".format(self.__cache_dir_path,
+                                                                      self.crypto,
+                                                                      self.currency))
+        download_link = 'https://www.cryptodatadownload.com/cdd/Binance_{0}{1}_1h.csv'.format(self.crypto,
+                                                                                              self.currency)
         http = urllib3.PoolManager()
         r = http.request('GET', download_link, preload_content=False)
         if r.status != 200:
             return None
         chunk_size = 512
-        download_file_path = os.path.join(self.cache_path, 'download_'
-                                          + crypto
-                                          + currency
+        now = datetime.datetime.now()
+        download_file_path = os.path.join(self.__cache_dir_path, 'download_'
+                                          + self.crypto
+                                          + self.currency
                                           + '_'
-                                          + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                                          + now.strftime("%Y-%m-%d-%H-%M-%S")
                                           + '.csv')
-        data_file_path = os.path.join(self.cache_path, 'data_'
-                                      + crypto
-                                      + currency
+        data_file_path = os.path.join(self.__cache_dir_path, 'data_'
+                                      + self.crypto
+                                      + self.currency
                                       + '_'
-                                      + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                                      + now.strftime("%Y-%m-%d-%H-%M-%S")
                                       + '.csv')
         with open(download_file_path, 'wb') as out:
             while True:
@@ -139,34 +87,111 @@ class CryptodatadownloadScraper(WebScraper):
             for line in iter(downloaded_f):
                 data_f.write(line)
         os.remove(download_file_path)
-        # Remove the previous latest file
-        if latest_file is not None:
-            os.remove(latest_file)
+        if self.__cache_file is not None:
+            os.remove(self.__cache_file)
+        self.__cache_file = data_file_path
+        self.__last_update = now
+
+    def __is_expired(self):
+        return self.__last_update is None or self.__last_update + self.__update_period < datetime.datetime.now()
+
+    def lookup(self, timestamp) -> crypto_record.CryptoRecord:
+        # Update cache if necessary
+        if timestamp > self.__last_update and self.__is_expired():
+            self.__update_cache()
+        df = pd.read_csv(self.__cache_file)
+        result = df.loc[df['date'] == timestamp.strftime("%Y-%m-%d %H:%M:%S")]
+        # A miss
+        if len(result) == 0:
+            logging.debug("Miss for {0}.".format(timestamp))
+            return None
+        record = crypto_record.CryptoRecord(
+            datetime.datetime.strptime(result.iloc[0]['date'], '%Y-%m-%d %H:%M:%S'),
+            result.iloc[0]['open'],
+            result.iloc[0]['high'],
+            result.iloc[0]['low'],
+            result.iloc[0]['close'],
+            self.crypto,
+            self.currency)
+        logging.debug('Hit for {0}: {1}'.format(timestamp, record))
+        return record
+
+    def get_records_between_dates(self, start_timestamp, end_timestamp):
+        # Update cache if necessary
+        if end_timestamp > self.__last_update and self.__is_expired():
+            self.__update_cache()
+        df = pd.read_csv(self.__cache_file)
+        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S'))
+        records = dict()
+        for _, row in df.iterrows():
+            if start_timestamp <= row['date'] <= end_timestamp:
+                records.update({row['date']: crypto_record.CryptoRecord(row['date'],
+                                                                        row['open'],
+                                                                        row['high'],
+                                                                        row['low'],
+                                                                        row['close'],
+                                                                        self.crypto,
+                                                                        self.currency)})
+        logging.debug('Found {0} records between {1} and {2}'.format(len(records), start_timestamp, end_timestamp))
+        return records
+
+    def get_n_records_until(self, end_timestamp, n_records):
+        # Update cache if necessary
+        if end_timestamp > self.__last_update and self.__is_expired():
+            self.__update_cache()
+        df = pd.read_csv(self.__cache_file)
+        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S'))
+        df.sort_values(by='unix', inplace=True)
+        first_earlier_i = 0
+        for _, row in df.iterrows():
+            if row['date'] <= end_timestamp:
+                break
+            first_earlier_i += 1
+        i = 0
+        results = dict()
+        while i < n_records:
+            record = df.iloc[first_earlier_i + i]
+            result = crypto_record.CryptoRecord(record['date'],
+                                                record['open'],
+                                                record['high'],
+                                                record['low'],
+                                                record['close'],
+                                                self.crypto,
+                                                self.currency)
+            results.update({record['date']: result})
+            i += 1
+        return results
+
+    def __del__(self):
+        os.remove(self.__cache_file)
+
+
+class CryptodatadownloadScraper(WebScraper):
 
     def __init__(self, cache_dir):
-        self.cache_path = cache_dir
-        self.__try_create_cache()
+        self.__caches = dict()
+        self.__caches_dir = cache_dir
+        # self.__try_create_cache()
 
     def get_record_by_date(self, timestamp, crypto, currency) -> crypto_record.CryptoRecord:
-        result = self.__lookup_cache(timestamp, crypto, currency)
-        if result is not None:
-            return result
-        self.__update_cache(crypto, currency)
-        return self.__lookup_cache(timestamp, crypto, currency)
+        cache = self.__caches.get((crypto, currency))
+        if cache is None:
+            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
+            self.__caches.update({(crypto, currency): cache})
+        return cache.lookup(timestamp)
 
-    def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency,
-                                  t_delta=datetime.timedelta(days=1)) -> [crypto_record.CryptoRecord]:
-        results = dict()
-        if self.__get_last_cache_update(crypto, currency) < end_timestamp:
-            self.__update_cache(crypto, currency)
-        while start_timestamp <= end_timestamp:
-            results.update({start_timestamp: self.get_record_by_date(start_timestamp, crypto, currency)})
-            start_timestamp += t_delta
-        return results
+    def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency) \
+            -> [crypto_record.CryptoRecord]:
+        cache = self.__caches.get((crypto, currency))
+        if cache is None:
+            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
+            self.__caches.update({(crypto, currency): cache})
+        return cache.get_records_between_dates(start_timestamp, end_timestamp)
 
     def get_n_records_until(self, end_timestamp, crypto, currency, n_records):
-        if self.__get_last_cache_update(crypto, currency) < end_timestamp:
-            self.__update_cache(crypto, currency)
-        results = self.__get_records_until_from_cache(end_timestamp, crypto, currency, n_records)
-        return results
+        cache = self.__caches.get((crypto, currency))
+        if cache is None:
+            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
+            self.__caches.update({(crypto, currency): cache})
+        return cache.get_n_records_until(end_timestamp, n_records)
 
