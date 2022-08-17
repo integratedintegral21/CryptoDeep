@@ -9,13 +9,13 @@ from tensorflow.python.keras.models import load_model
 
 def main():
     std_scaler = joblib.load(os.path.dirname(__file__) + '/scaler.joblib')
-    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_1h_val.csv')
+    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d_val.csv')
     X_val, y_val, _ = get_normalized_sequences(val_df, 50, 1, std_scaler)
     timestamps = X_val[:, :, 1]
     X_val = X_val[:, :, 2:].astype(float)
     y_val = y_val.astype(float)
 
-    model = load_model(os.path.dirname(__file__) + '/logs/checkpoint-1h-50-back')
+    model = load_model(os.path.dirname(__file__) + '/logs/checkpoint-1d-50-back')
     model.evaluate(X_val, y_val)
 
     y_pred = model.predict(X_val)[:, 0]
@@ -31,7 +31,7 @@ def main():
         plt.plot(t_stp, closings)
         plt.scatter(t_stp[-1:], [y_t])
         plt.scatter(t_stp[-1:], [y_p], c='red')
-        # plt.show()
+        plt.show()
     unscaled_inference = np.asarray(unscaled_inference)
     print("Mean absolute prediction error (unscaled predictions):", mean_absolute_error(unscaled_inference[:, 0],
                                                                                         unscaled_inference[:, 1]))

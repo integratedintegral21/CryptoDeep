@@ -4,7 +4,7 @@ import numpy as np
 import logging
 from tensorflow.python.keras.models import load_model
 
-from train import load_data
+from NN.train import load_data
 
 
 def main(input_sequences: np.ndarray, scaler_path: str, ckpt_path):

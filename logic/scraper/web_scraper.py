@@ -47,7 +47,8 @@ class CryptodatadownloadCache:
         self.currency = currency
         if not os.path.isdir(self.__cache_dir_path):
             os.mkdir(self.__cache_dir_path)
-        self.__update_cache()
+        if not self.__update_cache():
+            raise Exception('Unable to update cache')
         logging.debug("Created cache at {0}. Symbols: {1}/{2}. Update period:{3}. Last update: {4}.".format(
             self.__cache_dir_path,
             self.crypto,
@@ -64,9 +65,9 @@ class CryptodatadownloadCache:
         http = urllib3.PoolManager()
         r = http.request('GET', download_link, preload_content=False)
         if r.status != 200:
-            return None
+            return False
         chunk_size = 512
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
         download_file_path = os.path.join(self.__cache_dir_path, 'download_'
                                           + self.crypto
                                           + self.currency
@@ -95,6 +96,7 @@ class CryptodatadownloadCache:
             os.remove(self.__cache_file)
         self.__cache_file = data_file_path
         self.__last_update = now
+        return True
 
     def __is_expired(self):
         return self.__last_update is None or self.__last_update + self.__update_period < datetime.datetime.now()
@@ -102,7 +104,9 @@ class CryptodatadownloadCache:
     def lookup(self, timestamp) -> crypto_record.CryptoRecord:
         # Update cache if necessary
         if timestamp > self.__last_update and self.__is_expired():
-            self.__update_cache()
+            update_res = self.__update_cache()
+            if not update_res:
+                return None
         df = pd.read_csv(self.__cache_file)
         result = df.loc[df['date'] == timestamp.strftime("%Y-%m-%d %H:%M:%S")]
         # A miss
@@ -123,9 +127,12 @@ class CryptodatadownloadCache:
     def get_records_between_dates(self, start_timestamp, end_timestamp):
         # Update cache if necessary
         if end_timestamp > self.__last_update and self.__is_expired():
-            self.__update_cache()
+            update_res = self.__update_cache()
+            if not update_res:
+                return None
         df = pd.read_csv(self.__cache_file)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S'))
+        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+                                      .astimezone(datetime.timezone.utc))
         records = dict()
         for _, row in df.iterrows():
             if start_timestamp <= row['date'] <= end_timestamp:
@@ -142,10 +149,13 @@ class CryptodatadownloadCache:
     def get_n_records_until(self, end_timestamp, n_records):
         # Update cache if necessary
         if end_timestamp > self.__last_update and self.__is_expired():
-            self.__update_cache()
+            update_res = self.__update_cache()
+            if not update_res:
+                return None
         df = pd.read_csv(self.__cache_file)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S'))
-        df.sort_values(by='unix', inplace=True)
+        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+                                      .astimezone(datetime.timezone.utc))
+        df.sort_values(by='unix', inplace=True, ascending=False)
         first_earlier_i = 0
         for _, row in df.iterrows():
             if row['date'] <= end_timestamp:
@@ -174,7 +184,6 @@ class CryptodatadownloadScraper(WebScraper):
     def __init__(self, cache_dir):
         self.__caches = dict()
         self.__caches_dir = cache_dir
-        # self.__try_create_cache()
 
     def get_record_by_date(self, timestamp, crypto, currency) -> crypto_record.CryptoRecord:
         cache = self.__caches.get((crypto, currency))
