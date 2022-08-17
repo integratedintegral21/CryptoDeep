@@ -21,6 +21,10 @@ class WebScraper(ABC):
             -> [crypto_record.CryptoRecord]:
         pass
 
+    @abstractmethod
+    def get_n_records_until(self, end_timestamp, crypto, currency, n_records) -> [crypto_record.CryptoRecord]:
+        pass
+
 
 class CoinmarketcapScraper(WebScraper):
     def __init__(self, driver_path):
@@ -167,7 +171,6 @@ class CryptodatadownloadCache:
 
 
 class CryptodatadownloadScraper(WebScraper):
-
     def __init__(self, cache_dir):
         self.__caches = dict()
         self.__caches_dir = cache_dir
@@ -194,4 +197,3 @@ class CryptodatadownloadScraper(WebScraper):
             cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
             self.__caches.update({(crypto, currency): cache})
         return cache.get_n_records_until(end_timestamp, n_records)
-
