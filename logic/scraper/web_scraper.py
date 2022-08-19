@@ -99,7 +99,8 @@ class CryptodatadownloadCache:
         return True
 
     def __is_expired(self):
-        return self.__last_update is None or self.__last_update + self.__update_period < datetime.datetime.now()
+        return self.__last_update is None or self.__last_update + self.__update_period < datetime.datetime.now(
+            tz=datetime.timezone.utc)
 
     def lookup(self, timestamp) -> crypto_record.CryptoRecord:
         # Update cache if necessary
@@ -146,6 +147,23 @@ class CryptodatadownloadCache:
         logging.debug('Found {0} records between {1} and {2}'.format(len(records), start_timestamp, end_timestamp))
         return records
 
+    def get_latest_record(self):
+        if self.__is_expired():
+            update_res = self.__update_cache()
+            if not update_res:
+                return None
+        df = pd.read_csv(self.__cache_file)
+        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+                                      .astimezone(datetime.timezone.utc))
+        record = df.iloc[np.argmax(df['date'])]
+        return crypto_record.CryptoRecord(record['date'],
+                                          record['open'],
+                                          record['high'],
+                                          record['low'],
+                                          record['close'],
+                                          self.crypto,
+                                          self.currency)
+
     def get_n_records_until(self, end_timestamp, n_records):
         # Update cache if necessary
         if end_timestamp > self.__last_update and self.__is_expired():
@@ -186,14 +204,36 @@ class CryptodatadownloadScraper(WebScraper):
         self.__caches_dir = cache_dir
 
     def get_record_by_date(self, timestamp, crypto, currency) -> crypto_record.CryptoRecord:
+        """
+        Returns a record for a given timestamp
+        :param timestamp:
+        :param crypto:
+        :param currency:
+        :return:
+        """
         cache = self.__caches.get((crypto, currency))
         if cache is None:
             cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
             self.__caches.update({(crypto, currency): cache})
         return cache.lookup(timestamp)
 
+    def get_latest_record(self, crypto, currency) -> crypto_record.CryptoRecord:
+        cache = self.__caches.get((crypto, currency))
+        if cache is None:
+            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
+            self.__caches.update({(crypto, currency): cache})
+        return cache.get_latest_record()
+
     def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency) \
             -> [crypto_record.CryptoRecord]:
+        """
+        Returns sorted (descending order) records between given dates
+        :param start_timestamp:
+        :param end_timestamp:
+        :param crypto:
+        :param currency:
+        :return:
+        """
         cache = self.__caches.get((crypto, currency))
         if cache is None:
             cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
@@ -201,6 +241,14 @@ class CryptodatadownloadScraper(WebScraper):
         return cache.get_records_between_dates(start_timestamp, end_timestamp)
 
     def get_n_records_until(self, end_timestamp, crypto, currency, n_records):
+        """
+        Returns sorted (descending order) records until a given date
+        :param end_timestamp:
+        :param crypto:
+        :param currency:
+        :param n_records:
+        :return:
+        """
         cache = self.__caches.get((crypto, currency))
         if cache is None:
             cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)

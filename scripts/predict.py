@@ -21,12 +21,16 @@ def parse_args():
 
 def main(crypto, currency):
     logging.basicConfig(level=logging.INFO)
+
+    # Retrieve last 30 days
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     earliest_record = now - datetime.timedelta(days=30)
     logging.info("Predicting for {0}".format(now))
     scraper = CryptodatadownloadScraper(current_dir + '/cache')
-    preceding_data = scraper.get_records_between_dates(earliest_record, now, crypto, currency)
-    print(preceding_data)
+    # preceding_data = scraper.get_records_between_dates(earliest_record, now, crypto, currency)
+
+    # Get latest record
+    latest_record = scraper.get_latest_record(crypto, currency)
 
 
 if __name__ == "__main__":
