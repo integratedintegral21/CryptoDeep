@@ -14,7 +14,7 @@ def main(input_sequences: np.ndarray, scaler_path: str, ckpt_path):
     logging.info("Model loaded successfully from {0}".format(ckpt_path))
     model.summary()
     predictions = model.predict(input_sequences) * np.sqrt(std_scaler.var_[-1]) + std_scaler.mean_[-1]
-    print(predictions)
+    logging.info("Predictions: {0}".format(predictions))
     return predictions
 
 

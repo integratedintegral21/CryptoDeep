@@ -211,17 +211,19 @@ class CryptodatadownloadScraper(WebScraper):
         :param currency:
         :return:
         """
-        cache = self.__caches.get((crypto, currency))
-        if cache is None:
-            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
-            self.__caches.update({(crypto, currency): cache})
+        cache = self.__get_cache_instance(crypto, currency)
         return cache.lookup(timestamp)
 
-    def get_latest_record(self, crypto, currency) -> crypto_record.CryptoRecord:
+    def __get_cache_instance(self, crypto, currency):
         cache = self.__caches.get((crypto, currency))
         if cache is None:
-            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
+            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency,
+                                            update_period=datetime.timedelta(hours=1))
             self.__caches.update({(crypto, currency): cache})
+        return cache
+
+    def get_latest_record(self, crypto, currency) -> crypto_record.CryptoRecord:
+        cache = self.__get_cache_instance(crypto, currency)
         return cache.get_latest_record()
 
     def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency) \
@@ -234,10 +236,7 @@ class CryptodatadownloadScraper(WebScraper):
         :param currency:
         :return:
         """
-        cache = self.__caches.get((crypto, currency))
-        if cache is None:
-            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
-            self.__caches.update({(crypto, currency): cache})
+        cache = self.__get_cache_instance(crypto, currency)
         return cache.get_records_between_dates(start_timestamp, end_timestamp)
 
     def get_n_records_until(self, end_timestamp, crypto, currency, n_records):
@@ -249,8 +248,5 @@ class CryptodatadownloadScraper(WebScraper):
         :param n_records:
         :return:
         """
-        cache = self.__caches.get((crypto, currency))
-        if cache is None:
-            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency)
-            self.__caches.update({(crypto, currency): cache})
+        cache = self.__get_cache_instance(crypto, currency)
         return cache.get_n_records_until(end_timestamp, n_records)
