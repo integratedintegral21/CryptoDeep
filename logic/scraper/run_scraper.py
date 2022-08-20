@@ -2,20 +2,19 @@ import datetime
 import logging
 import os.path
 
-from web_scraper import CryptodatadownloadScraper
+from web_scraper import CryptodatadownloadScraperDB
 
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
-    scraper = CryptodatadownloadScraper(os.path.dirname(__file__) + '/cache')
-    timestamp = datetime.datetime(2022, 8, 15, 0, 0, 0)
-    for i in range(4):
-        print(scraper.get_record_by_date(timestamp, 'ETH', 'GBP'))
-    first_timestamp = datetime.datetime(2022, 8, 5, 0, 0, 0)
-    last_timestamp = datetime.datetime(2022, 8, 16, 0, 0, 0)
-    print(scraper.get_records_between_dates(first_timestamp, last_timestamp, 'BTC', 'GBP'))
-    print(scraper.get_records_between_dates(first_timestamp, last_timestamp, 'ETH', 'GBP'))
-    print(scraper.get_n_records_until(last_timestamp, 'BTC', 'GBP', 50))
+    scraper = CryptodatadownloadScraperDB('ETH', 'GBP', 'localhost', 'cryptodb', 'cryptodb', 'cryptodb',
+                                          os.path.dirname(__file__) + '/cache')
+    scraper.update_db()
+    timestamp = datetime.datetime(2022, 8, 19, 7)
+    print(scraper.get_record_by_date(timestamp))
+    print(scraper.get_latest_record())
+    first_timestamp = datetime.datetime(2022, 8, 1)
+    print(scraper.get_records_between_dates(first_timestamp, timestamp))
 
 
 if __name__ == "__main__":

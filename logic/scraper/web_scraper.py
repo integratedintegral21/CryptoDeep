@@ -1,80 +1,117 @@
 import datetime
 import logging
 import os
-import glob
+import psycopg2
+import pytz
 
 import numpy as np
-from selenium import webdriver
 import urllib3
 import pandas as pd
 from abc import ABC, abstractmethod
 from logic.model import crypto_record
 
 
-class WebScraper(ABC):
+class WebScraperDB(ABC):
     @abstractmethod
-    def get_record_by_date(self, timestamp, crypto, currency) -> crypto_record.CryptoRecord:
+    def update_db(self):
         pass
 
     @abstractmethod
-    def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency) \
-            -> [crypto_record.CryptoRecord]:
+    def get_record_by_date(self, timestamp):
         pass
 
     @abstractmethod
-    def get_n_records_until(self, end_timestamp, crypto, currency, n_records) -> [crypto_record.CryptoRecord]:
+    def get_latest_record(self):
+        pass
+
+    @abstractmethod
+    def get_records_between_dates(self, first_timestamp, last_timestamp):
         pass
 
 
-class CoinmarketcapScraper(WebScraper):
-    def __init__(self, driver_path):
-        self.driver_ = webdriver.Chrome(driver_path)
+class CryptodatadownloadScraperDB(WebScraperDB):
+    def __init__(self, crypto, currency, hostname, database, user, password, cache_dir):
+        cur = None
+        self.__latest_timestamp = None
+        try:
+            self.__conn = psycopg2.connect(host=hostname, database=database, user=user, password=password)
+            cur = self.__conn.cursor()
+            cur.execute("SELECT version()")
+            logging.debug("Postgresql version: {0}".format(cur.fetchone()))
+            logging.debug("Database connection: {0}".format(self.__conn))
 
-    def get_record_by_date(self, timestamp, crypto, currency):
-        self.driver_.get('https://coinmarketcap.com')
+            # Create table(s)
+            table_name = crypto + '_' + currency + '_records'
+            create_table_sql = "CREATE TABLE IF NOT EXISTS " + table_name \
+                               + " ( record_id SERIAL PRIMARY KEY," \
+                               + 'timestamp TIMESTAMP NOT NULL,' \
+                               + 'open DOUBLE PRECISION NOT NULL,' \
+                               + 'high DOUBLE PRECISION NOT NULL,' \
+                               + 'low DOUBLE PRECISION NOT NULL,' \
+                               + 'close DOUBLE PRECISION NOT NULL)'
+            cur.execute(create_table_sql)
+            self.__conn.commit()
 
-    def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency):
-        self.driver_.get('https://coinmarketcap.com')
+            # Get the latest record if the table is not empty
+            cur.execute("SELECT MAX(timestamp) from {0}".format(table_name))
+            (self.__latest_timestamp, ) = cur.fetchone()
+            self.__latest_timestamp = pytz.timezone('UTC').localize(self.__latest_timestamp)
+        except psycopg2.DatabaseError as e:
+            logging.error(e)
+        finally:
+            if cur is not None:
+                cur.close()
 
-
-class CryptodatadownloadCache:
-    def __init__(self, cache_path, crypto, currency, update_period=datetime.timedelta(seconds=0)):
-        self.__cache_dir_path = cache_path
-        self.__update_period = update_period
-        self.__cache_file = None
-        self.__last_update = None
+        self.__cache_dir = cache_dir
         self.crypto = crypto
         self.currency = currency
-        if not os.path.isdir(self.__cache_dir_path):
-            os.mkdir(self.__cache_dir_path)
-        if not self.__update_cache():
-            raise Exception('Unable to update cache')
-        logging.debug("Created cache at {0}. Symbols: {1}/{2}. Update period:{3}. Last update: {4}.".format(
-            self.__cache_dir_path,
-            self.crypto,
-            self.currency,
-            self.__update_period,
-            self.__last_update))
 
-    def __update_cache(self):
-        logging.info("Updating cache at {0}. Symbols: {1}/{2}".format(self.__cache_dir_path,
-                                                                      self.crypto,
-                                                                      self.currency))
+    def __del__(self):
+        if self.__conn is not None:
+            self.__conn.close()
+
+    def __insert_latest_records(self, df):
+        latest_records = []
+        latest_df_timestamp = max(df['date'])
+        if self.__latest_timestamp is None:
+            latest_records = df.to_numpy()[:, [1, 3, 4, 5, 6]]
+            self.__latest_timestamp = latest_df_timestamp
+        elif self.__latest_timestamp < latest_df_timestamp:
+            latest_records = np.asarray([[row['date'], row['open'], row['high'], row['low'], row['close']]
+                                         for row in df.iterrows() if row['date'] > self.__latest_timestamp])
+            self.__latest_timestamp = latest_df_timestamp
+        table_name = self.crypto + '_' + self.currency + '_records'
+        cur = None
+        try:
+            cur = self.__conn.cursor()
+            for date, opening, high, low, closing in latest_records:
+                insert_sql = "INSERT INTO " + table_name + "(timestamp, open, high, low, close) VALUES(%s, %s, %s, " \
+                                                           "%s, %s) "
+                cur.execute(insert_sql, (date.strftime("%Y-%m-%d %H:%M:%S"), opening, high, low, closing))
+            self.__conn.commit()
+        except psycopg2.DatabaseError as e:
+            logging.error(e)
+        finally:
+            if cur is not None:
+                cur.close()
+
+    def update_db(self):
         download_link = 'https://www.cryptodatadownload.com/cdd/Binance_{0}{1}_1h.csv'.format(self.crypto,
                                                                                               self.currency)
+        logging.info("Downloading {0}".format(download_link))
         http = urllib3.PoolManager()
         r = http.request('GET', download_link, preload_content=False)
         if r.status != 200:
             return False
         chunk_size = 512
         now = datetime.datetime.now(tz=datetime.timezone.utc)
-        download_file_path = os.path.join(self.__cache_dir_path, 'download_'
+        download_file_path = os.path.join(self.__cache_dir, 'download_'
                                           + self.crypto
                                           + self.currency
                                           + '_'
                                           + now.strftime("%Y-%m-%d-%H-%M-%S")
                                           + '.csv')
-        data_file_path = os.path.join(self.__cache_dir_path, 'data_'
+        data_file_path = os.path.join(self.__cache_dir, 'data_'
                                       + self.crypto
                                       + self.currency
                                       + '_'
@@ -92,161 +129,52 @@ class CryptodatadownloadCache:
             for line in iter(downloaded_f):
                 data_f.write(line)
         os.remove(download_file_path)
-        if self.__cache_file is not None:
-            os.remove(self.__cache_file)
-        self.__cache_file = data_file_path
-        self.__last_update = now
-        return True
+        df = pd.read_csv(data_file_path)
+        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+                                      .astimezone(datetime.timezone.utc))
+        self.__insert_latest_records(df)
+        os.remove(data_file_path)
 
-    def __is_expired(self):
-        return self.__last_update is None or self.__last_update + self.__update_period < datetime.datetime.now(
-            tz=datetime.timezone.utc)
-
-    def lookup(self, timestamp) -> crypto_record.CryptoRecord:
-        # Update cache if necessary
-        if timestamp > self.__last_update and self.__is_expired():
-            update_res = self.__update_cache()
-            if not update_res:
-                return None
-        df = pd.read_csv(self.__cache_file)
-        result = df.loc[df['date'] == timestamp.strftime("%Y-%m-%d %H:%M:%S")]
-        # A miss
-        if len(result) == 0:
-            logging.debug("Miss for {0}.".format(timestamp))
-            return None
-        record = crypto_record.CryptoRecord(
-            datetime.datetime.strptime(result.iloc[0]['date'], '%Y-%m-%d %H:%M:%S'),
-            result.iloc[0]['open'],
-            result.iloc[0]['high'],
-            result.iloc[0]['low'],
-            result.iloc[0]['close'],
-            self.crypto,
-            self.currency)
-        logging.debug('Hit for {0}: {1}'.format(timestamp, record))
+    def get_record_by_date(self, timestamp):
+        cur = None
+        record = None
+        try:
+            cur = self.__conn.cursor()
+            table_name = self.crypto + '_' + self.currency + '_records'
+            timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            cur.execute("SELECT * FROM {0} WHERE timestamp=%s".format(table_name), (timestamp_str, ))
+            result = cur.fetchone()
+            if result is not None:
+                record = crypto_record.CryptoRecord(result[1], result[2], result[3], result[4], result[5],
+                                                    self.crypto, self.currency)
+        except psycopg2.DatabaseError as e:
+            logging.error(e)
+        finally:
+            if cur is not None:
+                cur.close()
         return record
 
-    def get_records_between_dates(self, start_timestamp, end_timestamp):
-        # Update cache if necessary
-        if end_timestamp > self.__last_update and self.__is_expired():
-            update_res = self.__update_cache()
-            if not update_res:
-                return None
-        df = pd.read_csv(self.__cache_file)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
-                                      .astimezone(datetime.timezone.utc))
-        records = dict()
-        for _, row in df.iterrows():
-            if start_timestamp <= row['date'] <= end_timestamp:
-                records.update({row['date']: crypto_record.CryptoRecord(row['date'],
-                                                                        row['open'],
-                                                                        row['high'],
-                                                                        row['low'],
-                                                                        row['close'],
-                                                                        self.crypto,
-                                                                        self.currency)})
-        logging.debug('Found {0} records between {1} and {2}'.format(len(records), start_timestamp, end_timestamp))
-        return records
-
     def get_latest_record(self):
-        if self.__is_expired():
-            update_res = self.__update_cache()
-            if not update_res:
-                return None
-        df = pd.read_csv(self.__cache_file)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
-                                      .astimezone(datetime.timezone.utc))
-        record = df.iloc[np.argmax(df['date'])]
-        return crypto_record.CryptoRecord(record['date'],
-                                          record['open'],
-                                          record['high'],
-                                          record['low'],
-                                          record['close'],
-                                          self.crypto,
-                                          self.currency)
+        return self.get_record_by_date(self.__latest_timestamp)
 
-    def get_n_records_until(self, end_timestamp, n_records):
-        # Update cache if necessary
-        if end_timestamp > self.__last_update and self.__is_expired():
-            update_res = self.__update_cache()
-            if not update_res:
-                return None
-        df = pd.read_csv(self.__cache_file)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
-                                      .astimezone(datetime.timezone.utc))
-        df.sort_values(by='unix', inplace=True, ascending=False)
-        first_earlier_i = 0
-        for _, row in df.iterrows():
-            if row['date'] <= end_timestamp:
-                break
-            first_earlier_i += 1
-        i = 0
-        results = dict()
-        while i < n_records:
-            record = df.iloc[first_earlier_i + i]
-            result = crypto_record.CryptoRecord(record['date'],
-                                                record['open'],
-                                                record['high'],
-                                                record['low'],
-                                                record['close'],
-                                                self.crypto,
-                                                self.currency)
-            results.update({record['date']: result})
-            i += 1
-        return results
-
-    def __del__(self):
-        os.remove(self.__cache_file)
-
-
-class CryptodatadownloadScraper(WebScraper):
-    def __init__(self, cache_dir):
-        self.__caches = dict()
-        self.__caches_dir = cache_dir
-
-    def get_record_by_date(self, timestamp, crypto, currency) -> crypto_record.CryptoRecord:
-        """
-        Returns a record for a given timestamp
-        :param timestamp:
-        :param crypto:
-        :param currency:
-        :return:
-        """
-        cache = self.__get_cache_instance(crypto, currency)
-        return cache.lookup(timestamp)
-
-    def __get_cache_instance(self, crypto, currency):
-        cache = self.__caches.get((crypto, currency))
-        if cache is None:
-            cache = CryptodatadownloadCache(self.__caches_dir, crypto, currency,
-                                            update_period=datetime.timedelta(hours=1))
-            self.__caches.update({(crypto, currency): cache})
-        return cache
-
-    def get_latest_record(self, crypto, currency) -> crypto_record.CryptoRecord:
-        cache = self.__get_cache_instance(crypto, currency)
-        return cache.get_latest_record()
-
-    def get_records_between_dates(self, start_timestamp, end_timestamp, crypto, currency) \
-            -> [crypto_record.CryptoRecord]:
-        """
-        Returns sorted (descending order) records between given dates
-        :param start_timestamp:
-        :param end_timestamp:
-        :param crypto:
-        :param currency:
-        :return:
-        """
-        cache = self.__get_cache_instance(crypto, currency)
-        return cache.get_records_between_dates(start_timestamp, end_timestamp)
-
-    def get_n_records_until(self, end_timestamp, crypto, currency, n_records):
-        """
-        Returns sorted (descending order) records until a given date
-        :param end_timestamp:
-        :param crypto:
-        :param currency:
-        :param n_records:
-        :return:
-        """
-        cache = self.__get_cache_instance(crypto, currency)
-        return cache.get_n_records_until(end_timestamp, n_records)
+    def get_records_between_dates(self, first_timestamp, last_timestamp):
+        cur = None
+        records = dict()
+        try:
+            cur = self.__conn.cursor()
+            table_name = self.crypto + '_' + self.currency + '_records'
+            first_timestamp_str = first_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            last_timestamp_str = last_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            cur.execute("SELECT * FROM {0} WHERE timestamp BETWEEN %s AND %s".format(table_name),
+                        (first_timestamp_str, last_timestamp_str))
+            result = cur.fetchall()
+            if result is not None:
+                for r in result:
+                    record = crypto_record.CryptoRecord(r[1], r[2], r[3], r[4], r[5], self.crypto, self.currency)
+                    records.update({r[1]: record})
+        except psycopg2.DatabaseError as e:
+            logging.error(e)
+        finally:
+            if cur is not None:
+                cur.close()
+        return records

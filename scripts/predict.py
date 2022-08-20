@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(parent_dir))
 SEQUENCE_LEN = 30
 
 from NN import inference
-from logic.scraper.web_scraper import CryptodatadownloadScraper
+from logic.scraper.web_scraper import CryptodatadownloadScraperDB
 
 
 def parse_args():
@@ -31,16 +31,17 @@ def main(crypto, currency, save_dir):
     # Retrieve last 30 days
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     logging.info("Predicting at {0}".format(now))
-    scraper = CryptodatadownloadScraper(current_dir + '/cache')
+    scraper = CryptodatadownloadScraperDB('ETH', 'GBP', 'localhost', 'cryptodb', 'cryptodb', 'cryptodb',
+                                          os.path.dirname(__file__) + '/cache')
 
-    latest_record = scraper.get_latest_record(crypto, currency)
+    latest_record = scraper.get_latest_record()
     logging.debug("Latest record available at {0}".format(latest_record.timestamp))
     current_timestamp = latest_record.timestamp
     sequence = []
     for i in range(SEQUENCE_LEN):
-        record = scraper.get_record_by_date(current_timestamp, crypto, currency)
+        record = scraper.get_record_by_date(current_timestamp)
         previous_timestamp = current_timestamp - datetime.timedelta(days=1)
-        daily_records = scraper.get_records_between_dates(previous_timestamp, current_timestamp, crypto, currency)
+        daily_records = scraper.get_records_between_dates(previous_timestamp, current_timestamp)
         daily_max = max([rec.high for _, rec in daily_records.items()])
         daily_min = min([rec.low for _, rec in daily_records.items()])
         previous_record = list(daily_records.values())[-1]
