@@ -3,6 +3,7 @@ import os.path
 import sys
 import logging
 import argparse
+import pickle
 
 import numpy as np
 
@@ -10,29 +11,33 @@ current_dir = os.path.dirname(__file__)
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, os.path.abspath(parent_dir))
 
+SEQUENCE_LEN = 30
+
 from NN import inference
 from logic.scraper.web_scraper import CryptodatadownloadScraper
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--crypto', required=True, help='Cryptocurrency symbol')
-    parser.add_argument('--currency', required=True, help='Currency symbol')
+    parser.add_argument('--crypto', required=True, help='Cryptocurrency symbol.')
+    parser.add_argument('--currency', required=True, help='Currency symbol.')
+    parser.add_argument('--save_dir', required=True, help='Directory where the results are saved.')
     return parser.parse_args()
 
 
-def main(crypto, currency):
+def main(crypto, currency, save_dir):
     logging.basicConfig(level=logging.INFO)
 
     # Retrieve last 30 days
     now = datetime.datetime.now(tz=datetime.timezone.utc)
-    logging.info("Predicting for {0}".format(now))
+    logging.info("Predicting at {0}".format(now))
     scraper = CryptodatadownloadScraper(current_dir + '/cache')
 
     latest_record = scraper.get_latest_record(crypto, currency)
+    logging.debug("Latest record available at {0}".format(latest_record.timestamp))
     current_timestamp = latest_record.timestamp
     sequence = []
-    for i in range(30):
+    for i in range(SEQUENCE_LEN):
         record = scraper.get_record_by_date(current_timestamp, crypto, currency)
         previous_timestamp = current_timestamp - datetime.timedelta(days=1)
         daily_records = scraper.get_records_between_dates(previous_timestamp, current_timestamp, crypto, currency)
@@ -51,11 +56,17 @@ def main(crypto, currency):
     sequence = np.asarray(sequence).astype(float)
     logging.debug("Neural network input: {0}".format(sequence))
     logging.info("Predicting...")
-    return inference.main([sequence],
-                          os.path.dirname(__file__) + '/../NN/scaler.joblib',
-                          os.path.dirname(__file__) + '/../NN/logs/checkpoint-1d-30-back')
+    [prediction] = inference.main([sequence],
+                                  os.path.dirname(__file__) + '/../NN/scaler.joblib',
+                                  os.path.dirname(__file__) + '/../NN/logs/checkpoint-1d-'
+                                  + str(SEQUENCE_LEN) + '-back')
+    prediction_date = latest_record.timestamp + datetime.timedelta(days=1)
+    filename = 'prediction_' + crypto + currency + now.strftime('%Y-%m-%d-%H-%M-%S') + '.pkl'
+    save_path = os.path.join(save_dir, filename)
+    with open(save_path, 'wb') as f:
+        pickle.dump({prediction_date: prediction}, f)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.crypto, args.currency)
+    main(args.crypto, args.currency, args.save_dir)
