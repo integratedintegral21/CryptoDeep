@@ -1,21 +1,22 @@
-import datetime
 import logging
 import os.path
+import asyncio
 
 from web_scraper import CryptodatadownloadScraperDB
 
 
-def main():
-    logging.basicConfig(level=logging.DEBUG)
+async def update_scraper():
     scraper = CryptodatadownloadScraperDB('ETH', 'GBP', 'localhost', 'cryptodb', 'cryptodb', 'cryptodb',
                                           os.path.dirname(__file__) + '/cache')
     scraper.update_db()
-    timestamp = datetime.datetime(2022, 8, 19, 7, tzinfo=datetime.timezone.utc)
-    print(scraper.get_record_by_date(timestamp))
-    print(scraper.get_latest_record())
-    first_timestamp = datetime.datetime(2022, 8, 1)
-    print(scraper.get_records_between_dates(first_timestamp, timestamp))
+    await asyncio.sleep(3600)
+
+
+async def main():
+    logging.basicConfig(level=logging.INFO)
+    while True:
+        await update_scraper()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

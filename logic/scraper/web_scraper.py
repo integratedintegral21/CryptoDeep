@@ -81,6 +81,7 @@ class CryptodatadownloadScraperDB(WebScraperDB):
             self.__latest_timestamp = latest_df_timestamp
         table_name = self.crypto + '_' + self.currency + '_records'
         cur = None
+        logging.info("Found {0} new records".format(len(latest_records)))
         try:
             cur = self.__conn.cursor()
             for date, opening, high, low, closing in latest_records:
@@ -133,6 +134,7 @@ class CryptodatadownloadScraperDB(WebScraperDB):
                                       .astimezone(datetime.timezone.utc))
         self.__insert_latest_records(df)
         os.remove(data_file_path)
+        logging.info("Database updated successfully.")
 
     def get_record_by_date(self, timestamp):
         return self.get_records_between_dates(timestamp, timestamp).get(timestamp)
