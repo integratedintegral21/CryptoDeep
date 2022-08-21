@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(parent_dir))
 SEQUENCE_LEN = 30
 
 from NN import inference
-from logic.scraper.web_scraper import CryptodatadownloadScraperDB
+from logic.scraper.web_scraper import CryptodatadownloadScraperDB, config
 
 
 def parse_args():
@@ -31,6 +31,7 @@ def main(crypto, currency, save_dir):
     # Retrieve last 30 days
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     logging.info("Predicting at {0}".format(now))
+    db_config = config(filename=os.path.dirname(__file__) + '/../logic/scraper/db_config/database.ini')
     scraper = CryptodatadownloadScraperDB('ETH', 'GBP', 'localhost', 'cryptodb', 'cryptodb', 'cryptodb',
                                           os.path.dirname(__file__) + '/cache')
 

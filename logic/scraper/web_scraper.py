@@ -6,7 +6,24 @@ import pytz
 import urllib3
 import pandas as pd
 from abc import ABC, abstractmethod
+from configparser import ConfigParser
+
 from logic.model import crypto_record
+
+
+def config(filename=os.path.dirname(__file__) + '/db_config/database.ini', section='postgresql'):
+    parser = ConfigParser()
+    parser.read(filename)
+
+    db = {}
+    if parser.has_section(section):
+        params = parser.items(section)
+        for param in params:
+            db[param[0]] = param[1]
+    else:
+        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
+
+    return db
 
 
 class WebScraperDB(ABC):
@@ -52,7 +69,7 @@ class CryptodatadownloadScraperDB(WebScraperDB):
 
             # Get the latest record if the table is not empty
             cur.execute("SELECT MAX(timestamp) from {0}".format(table_name))
-            (self.__latest_timestamp, ) = cur.fetchone()
+            (self.__latest_timestamp,) = cur.fetchone()
             self.__latest_timestamp = pytz.timezone('UTC').localize(self.__latest_timestamp)
         except psycopg2.DatabaseError as e:
             logging.error(e)
