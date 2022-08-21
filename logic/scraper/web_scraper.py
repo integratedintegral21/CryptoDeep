@@ -77,8 +77,7 @@ class CryptodatadownloadScraperDB(WebScraperDB):
             latest_records = df.to_numpy()[:, [1, 3, 4, 5, 6]]
             self.__latest_timestamp = latest_df_timestamp
         elif self.__latest_timestamp < latest_df_timestamp:
-            latest_records = np.asarray([[row['date'], row['open'], row['high'], row['low'], row['close']]
-                                         for row in df.iterrows() if row['date'] > self.__latest_timestamp])
+            latest_records = df.loc[df['date'] > self.__latest_timestamp].to_numpy()[:, [1, 3, 4, 5, 6]]
             self.__latest_timestamp = latest_df_timestamp
         table_name = self.crypto + '_' + self.currency + '_records'
         cur = None
