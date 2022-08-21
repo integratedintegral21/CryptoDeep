@@ -135,23 +135,7 @@ class CryptodatadownloadScraperDB(WebScraperDB):
         os.remove(data_file_path)
 
     def get_record_by_date(self, timestamp):
-        cur = None
-        record = None
-        try:
-            cur = self.__conn.cursor()
-            table_name = self.crypto + '_' + self.currency + '_records'
-            timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            cur.execute("SELECT * FROM {0} WHERE timestamp=%s".format(table_name), (timestamp_str, ))
-            result = cur.fetchone()
-            if result is not None:
-                record = crypto_record.CryptoRecord(result[1], result[2], result[3], result[4], result[5],
-                                                    self.crypto, self.currency)
-        except psycopg2.DatabaseError as e:
-            logging.error(e)
-        finally:
-            if cur is not None:
-                cur.close()
-        return record
+        return self.get_records_between_dates(timestamp, timestamp).get(timestamp)
 
     def get_latest_record(self):
         return self.get_record_by_date(self.__latest_timestamp)
@@ -169,8 +153,9 @@ class CryptodatadownloadScraperDB(WebScraperDB):
             result = cur.fetchall()
             if result is not None:
                 for r in result:
-                    record = crypto_record.CryptoRecord(r[1], r[2], r[3], r[4], r[5], self.crypto, self.currency)
-                    records.update({r[1]: record})
+                    timestamp = pytz.timezone('UTC').localize(r[1])
+                    record = crypto_record.CryptoRecord(timestamp, r[2], r[3], r[4], r[5], self.crypto, self.currency)
+                    records.update({timestamp: record})
         except psycopg2.DatabaseError as e:
             logging.error(e)
         finally:

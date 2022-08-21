@@ -10,7 +10,7 @@ def main():
     scraper = CryptodatadownloadScraperDB('ETH', 'GBP', 'localhost', 'cryptodb', 'cryptodb', 'cryptodb',
                                           os.path.dirname(__file__) + '/cache')
     scraper.update_db()
-    timestamp = datetime.datetime(2022, 8, 19, 7)
+    timestamp = datetime.datetime(2022, 8, 19, 7, tzinfo=datetime.timezone.utc)
     print(scraper.get_record_by_date(timestamp))
     print(scraper.get_latest_record())
     first_timestamp = datetime.datetime(2022, 8, 1)
