@@ -145,8 +145,8 @@ class CryptodatadownloadScraperDB(WebScraperDB):
                 data_f.write(line)
         os.remove(download_file_path)
         df = pd.read_csv(data_file_path)
-        df['date'] = df['date'].apply(lambda dt: datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
-                                      .astimezone(datetime.timezone.utc))
+        df['date'] = df['date'].apply(lambda dt: pytz.timezone('UTC').localize(
+            datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')))
         self.__insert_latest_records(df)
         os.remove(data_file_path)
         logging.info("Database updated successfully.")
