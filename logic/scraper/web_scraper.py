@@ -3,8 +3,6 @@ import logging
 import os
 import psycopg2
 import pytz
-
-import numpy as np
 import urllib3
 import pandas as pd
 from abc import ABC, abstractmethod
