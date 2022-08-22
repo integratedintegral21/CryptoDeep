@@ -111,8 +111,8 @@ class CryptodatadownloadScraperDB(WebScraperDB):
                 cur.close()
 
     def update_db(self):
-        download_link = 'https://www.cryptodatadownload.com/cdd/Binance_{0}{1}_1h.csv'.format(self.crypto,
-                                                                                              self.currency)
+        download_link = 'https://www.cryptodatadownload.com/cdd/Bitstamp_{0}{1}_1h.csv'.format(self.crypto,
+                                                                                               self.currency)
         logging.info("Downloading {0}".format(download_link))
         http = urllib3.PoolManager()
         r = http.request('GET', download_link, preload_content=False)
