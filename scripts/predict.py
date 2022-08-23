@@ -59,7 +59,7 @@ def main(crypto, currency, save_dir):
     logging.debug("Neural network input: {0}".format(sequence))
     logging.info("Predicting...")
     [prediction] = inference.main([sequence],
-                                  os.path.dirname(__file__) + '/../NN/scaler.joblib',
+                                  os.path.dirname(__file__) + '/../NN/ETHGBP_scaler.joblib',
                                   os.path.dirname(__file__) + '/../NN/logs/checkpoint-1d-'
                                   + str(SEQUENCE_LEN) + '-back')
     prediction_date = latest_record.timestamp + datetime.timedelta(days=1)

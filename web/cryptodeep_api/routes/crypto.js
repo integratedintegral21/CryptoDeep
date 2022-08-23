@@ -49,5 +49,7 @@ SAMPLE_DATA = [
 router.get('/:crytoSymbol/:currencySymbol/:n_records', function (req,
                                                                  res,
                                                                  next){
-
+    res.send(SAMPLE_DATA)
 })
+
+module.exports = router;

@@ -8,7 +8,7 @@ from tensorflow.python.keras.models import load_model
 
 
 def main():
-    std_scaler = joblib.load(os.path.dirname(__file__) + '/scaler.joblib')
+    std_scaler = joblib.load(os.path.dirname(__file__) + '/ETHGBP_scaler.joblib')
     val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d_val.csv')
     X_val, y_val, _ = get_normalized_sequences(val_df, 50, 1, std_scaler)
     timestamps = X_val[:, :, 1]

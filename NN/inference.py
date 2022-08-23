@@ -27,5 +27,5 @@ if __name__ == "__main__":
     main([sequence0,
           sequence1,
           sequence2],
-         os.path.dirname(__file__) + '/scaler.joblib',
+         os.path.dirname(__file__) + '/ETHGBP_scaler.joblib',
          os.path.dirname(__file__) + '/logs/checkpoint-1h-50-back')

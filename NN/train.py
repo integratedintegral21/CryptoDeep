@@ -52,7 +52,7 @@ def main():
     train_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d.csv')
     X_train, y_train, scaler = get_normalized_sequences(train_df, SEQUENCE_LEN)
     # Save scaler
-    joblib.dump(scaler, os.path.dirname(__file__) + '/scaler.joblib')
+    joblib.dump(scaler, os.path.dirname(__file__) + '/ETHGBP_scaler.joblib')
     # Drop timestamps
     X_train = X_train[:, :, 2:].astype(float)
     y_train = y_train.astype(float)
