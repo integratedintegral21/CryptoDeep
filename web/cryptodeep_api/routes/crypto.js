@@ -8,16 +8,18 @@ function createDateAsUTC(date) {
         date.getSeconds()));
 }
 
+function formatRecord(record) {
+    delete record.record_id
+    record.timestamp = createDateAsUTC(record.timestamp)
+    return record
+}
+
 router.get('/:cryptoSymbol/:currencySymbol/all', async function (req,
                                                                  res,
                                                                  next){
     try {
         const records = (await db.get_all_records(req.params.cryptoSymbol, req.params.currencySymbol))
-        records.map((element) => {
-            delete element.record_id
-            element.timestamp = createDateAsUTC(element.timestamp).toISOString()
-            return element
-        })
+        records.map(formatRecord)
         res.send(
             records.sort((a, b) => {
                 if (a.timestamp < b.timestamp) {
@@ -37,11 +39,7 @@ router.get('/:cryptoSymbol/:currencySymbol/:n_records', async function (req,
     try {
         const records = (await
             db.get_n_latest_records(req.params.cryptoSymbol, req.params.currencySymbol, req.params.n_records))
-        records.map((element) => {
-            delete element.record_id
-            element.timestamp = createDateAsUTC(element.timestamp).toISOString()
-            return element
-        })
+        records.map(formatRecord)
         res.send(
             records.sort((a, b) => {
                 if (a.timestamp < b.timestamp) {
@@ -63,11 +61,7 @@ router.get('/:cryptoSymbol/:currencySymbol/:start_date/:end_date', async functio
         const end_date = createDateAsUTC(moment(req.params.end_date, "YYYYMMDDhhmmss").toDate())
         const records = (await
             db.get_records_between(req.params.cryptoSymbol, req.params.currencySymbol, start_date, end_date))
-        records.map((element) => {
-            delete element.record_id
-            element.timestamp = createDateAsUTC(element.timestamp).toISOString()
-            return element
-        })
+        records.map(formatRecord)
         res.send(
             records.sort((a, b) => {
                 if (a.timestamp < b.timestamp) {
