@@ -3,7 +3,10 @@ import os.path
 import sys
 import logging
 import argparse
-import pickle
+import time
+
+import psycopg2
+import pytz
 
 import numpy as np
 
@@ -21,21 +24,72 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--crypto', required=True, help='Cryptocurrency symbol.')
     parser.add_argument('--currency', required=True, help='Currency symbol.')
-    parser.add_argument('--save_dir', required=True, help='Directory where the results are saved.')
     return parser.parse_args()
 
 
-def main(crypto, currency, save_dir):
-    logging.basicConfig(level=logging.INFO)
+def create_pred_table_if_exists(crypto, currency, db_conn):
+    table_name = crypto + '_' + currency + '_predictions'
+    cur = None
+    result = False
+    try:
+        create_table_sql = "CREATE TABLE IF NOT EXISTS " + table_name \
+                           + " ( prediction_id SERIAL PRIMARY KEY," \
+                           + 'timestamp TIMESTAMP NOT NULL,' \
+                           + 'close DOUBLE PRECISION NOT NULL )'
+        cur = db_conn.cursor()
+        cur.execute(create_table_sql)
+        db_conn.commit()
+        result = True
+    except psycopg2.DatabaseError as e:
+        logging.error(e)
+    finally:
+        if cur is not None:
+            cur.close()
+        return result
 
+
+def get_latest_prediction_timestamp(crypto, currency, conn):
+    table_name = crypto + '_' + currency + '_predictions'
+    cur = None
+    latest_timestamp = None
+    try:
+        cur = conn.cursor()
+        latest_date_sql = 'SELECT MAX(timestamp) FROM ' + table_name
+        cur.execute(latest_date_sql)
+        latest_timestamp = cur.fetchone()
+    except psycopg2.DatabaseError as e:
+        logging.error(e)
+    finally:
+        if cur is not None:
+            cur.close()
+        if latest_timestamp != (None,):
+            return pytz.timezone('UTC').localize(latest_timestamp[0])
+        return latest_timestamp[0]
+
+
+def insert_prediction(crypto, currency, conn, prediction_date, close):
+    table_name = crypto + '_' + currency + '_predictions'
+    cur = None
+    result = False
+    try:
+        cur = conn.cursor()
+        insert_sql = 'INSERT INTO ' + table_name + ' (timestamp, close) VALUES (%s, %s)'
+        cur.execute(insert_sql, (prediction_date.strftime("%Y-%m-%d %H:%M:%S"), close))
+        conn.commit()
+        logging.info("Prediction for {0} inserted.".format(prediction_date))
+        result = True
+    except psycopg2.DatabaseError as e:
+        logging.error(e)
+    finally:
+        if cur is not None:
+            cur.close()
+        return result
+
+
+def predict_from(latest_record, scraper):
     # Retrieve last 30 days
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     logging.info("Predicting at {0}".format(now))
-    db_config = config(filename=os.path.dirname(__file__) + '/../logic/scraper/db_config/database.ini')
-    scraper = CryptodatadownloadScraperDB('ETH', 'GBP', 'localhost', 'cryptodb', 'cryptodb', 'cryptodb',
-                                          os.path.dirname(__file__) + '/cache')
-
-    latest_record = scraper.get_latest_record()
     logging.debug("Latest record available at {0}".format(latest_record.timestamp))
     current_timestamp = latest_record.timestamp
     sequence = []
@@ -58,17 +112,42 @@ def main(crypto, currency, save_dir):
     sequence = np.asarray(sequence).astype(float)
     logging.debug("Neural network input: {0}".format(sequence))
     logging.info("Predicting...")
-    [prediction] = inference.main([sequence],
-                                  os.path.dirname(__file__) + '/../NN/ETHGBP_scaler.joblib',
-                                  os.path.dirname(__file__) + '/../NN/logs/checkpoint-1d-'
-                                  + str(SEQUENCE_LEN) + '-back')
-    prediction_date = latest_record.timestamp + datetime.timedelta(days=1)
-    filename = 'prediction_' + crypto + currency + now.strftime('%Y-%m-%d-%H-%M-%S') + '.pkl'
-    save_path = os.path.join(save_dir, filename)
-    with open(save_path, 'wb') as f:
-        pickle.dump({prediction_date: prediction}, f)
+    prediction = inference.main([sequence],
+                                os.path.dirname(__file__) + '/../NN/ETHGBP_scaler.joblib',
+                                os.path.dirname(__file__) + '/../NN/logs/checkpoint-1d-'
+                                + str(SEQUENCE_LEN) + '-back')
+    return prediction
+
+
+def main(crypto, currency):
+    logging.basicConfig(level=logging.INFO)
+    db_params = config()
+    db_conn = psycopg2.connect(host=db_params['host'], database=db_params['database'], user=db_params['user'],
+                               password=db_params['password'])
+    if not create_pred_table_if_exists(crypto, currency, db_conn):
+        return
+
+    scraper = CryptodatadownloadScraperDB(crypto, currency, db_params['host'], db_params['database'], db_params['user'],
+                                          db_params['password'], os.path.dirname(__file__) + '/cache')
+
+    while True:
+        logging.info("Updating predictions table...")
+        scraper.update_db()
+        latest_record = scraper.get_latest_record()
+        prediction_date = latest_record.timestamp + datetime.timedelta(days=1)
+        latest_prediction = get_latest_prediction_timestamp(crypto, currency, db_conn)
+
+        if latest_prediction is not None and latest_prediction <= prediction_date:
+            logging.info("Predictions are up-to-date")
+            time.sleep(1)
+            continue
+
+        pred = predict_from(latest_record, scraper)
+        insert_prediction(crypto, currency, db_conn, prediction_date, pred[0][0].astype(float))
+        time.sleep(1)
+    db_conn.close()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.crypto, args.currency, args.save_dir)
+    main(args.crypto, args.currency)
