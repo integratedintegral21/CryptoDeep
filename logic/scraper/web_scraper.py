@@ -70,7 +70,8 @@ class CryptodatadownloadScraperDB(WebScraperDB):
             # Get the latest record if the table is not empty
             cur.execute("SELECT MAX(timestamp) from {0}".format(table_name))
             (self.__latest_timestamp,) = cur.fetchone()
-            self.__latest_timestamp = pytz.timezone('UTC').localize(self.__latest_timestamp)
+            if self.__latest_timestamp is not None:
+                self.__latest_timestamp = pytz.timezone('UTC').localize(self.__latest_timestamp)
         except psycopg2.DatabaseError as e:
             logging.error(e)
         finally:
@@ -78,6 +79,7 @@ class CryptodatadownloadScraperDB(WebScraperDB):
                 cur.close()
 
         self.__cache_dir = cache_dir
+        os.makedirs(self.__cache_dir, exist_ok=True)
         self.crypto = crypto
         self.currency = currency
 

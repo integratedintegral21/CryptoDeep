@@ -15,7 +15,7 @@ def main():
     X_val = X_val[:, :, 2:].astype(float)
     y_val = y_val.astype(float)
 
-    model = load_model(os.path.dirname(__file__) + '/logs/checkpoint-1d-50-back')
+    model = load_model(os.path.dirname(__file__) + '/logs/checkpoint-1d-30-back')
     model.evaluate(X_val, y_val)
 
     y_pred = model.predict(X_val)[:, 0]
