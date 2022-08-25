@@ -7,9 +7,16 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import datetime
 import os
-
+import argparse
 
 SEQUENCE_LEN = 30
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--crypto', required=True, help='Cryptocurrency symbol.')
+    parser.add_argument('--currency', required=True, help='Currency symbol.')
+    return parser.parse_args()
 
 
 def load_data(path: str):
@@ -48,16 +55,16 @@ def create_model():
     return model
 
 
-def main():
-    train_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d.csv')
+def main(crypto, currency):
+    train_df = load_data(os.path.dirname(__file__) + '/data/Binance_' + crypto + currency + '_d.csv')
     X_train, y_train, scaler = get_normalized_sequences(train_df, SEQUENCE_LEN)
     # Save scaler
-    joblib.dump(scaler, os.path.dirname(__file__) + '/ETHGBP_scaler.joblib')
+    joblib.dump(scaler, os.path.dirname(__file__) + '/' + crypto + currency + '_scaler.joblib')
     # Drop timestamps
     X_train = X_train[:, :, 2:].astype(float)
     y_train = y_train.astype(float)
 
-    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_ETHGBP_d_val.csv')
+    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_' + crypto + currency + '_d_val.csv')
     X_val, y_val, _ = get_normalized_sequences(val_df, SEQUENCE_LEN, 1, scaler)
     X_val = X_val[:, :, 2:].astype(float)
     y_val = y_val.astype(float)
@@ -65,14 +72,16 @@ def main():
     model = create_model()
     model.summary()
     log_dir = os.path.dirname(__file__) + "/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    ckpt_path = os.path.dirname(__file__) + '/logs/checkpoint_' \
+                + crypto + currency + '_1d_' + str(SEQUENCE_LEN) + '_back'
     model.fit(X_train, y_train, epochs=2000, shuffle=True, validation_data=(X_val, y_val),
               callbacks=[
                   TensorBoard(log_dir, histogram_freq=1),
                   EarlyStopping(patience=10),
-                  ModelCheckpoint(os.path.dirname(__file__) + '/logs/checkpoint'
-                                  + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")),
+                  ModelCheckpoint(ckpt_path),
               ])
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(args.crypto, args.currency)

@@ -86,7 +86,7 @@ def insert_prediction(crypto, currency, conn, prediction_date, close):
         return result
 
 
-def predict_from(latest_record, scraper):
+def predict_from(latest_record, scraper, crypto, currency):
     # Retrieve last 30 days
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     logging.info("Predicting at {0}".format(now))
@@ -112,10 +112,12 @@ def predict_from(latest_record, scraper):
     sequence = np.asarray(sequence).astype(float)
     logging.debug("Neural network input: {0}".format(sequence))
     logging.info("Predicting...")
+    ckpt_path = os.path.dirname(__file__) + '/../NN/logs/checkpoint_' \
+                + crypto + currency + '_1d_' + str(SEQUENCE_LEN) + '_back'
+    scaler_path = os.path.dirname(__file__) + '/../NN/' + crypto + currency + '_scaler.joblib'
     prediction = inference.main([sequence],
-                                os.path.dirname(__file__) + '/../NN/ETHGBP_scaler.joblib',
-                                os.path.dirname(__file__) + '/../NN/logs/checkpoint-1d-'
-                                + str(SEQUENCE_LEN) + '-back')
+                                scaler_path,
+                                ckpt_path)
     return prediction
 
 
@@ -142,7 +144,7 @@ def main(crypto, currency):
             time.sleep(1)
             continue
 
-        pred = predict_from(latest_record, scraper)
+        pred = predict_from(latest_record, scraper, crypto, currency)
         insert_prediction(crypto, currency, db_conn, prediction_date, pred[0][0].astype(float))
         time.sleep(1)
     db_conn.close()
