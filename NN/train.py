@@ -8,8 +8,12 @@ import joblib
 import datetime
 import os
 import argparse
+import logging
 
-SEQUENCE_LEN = 30
+from logic.scraper.web_scraper import CryptodatadownloadScraperDB, config
+
+SEQUENCE_LEN = 50
+FORWARD_PREDICTION = 12
 
 
 def parse_args():
@@ -19,30 +23,15 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_data(path: str):
-    df = pd.read_csv(path)
-    df = df[['unix', 'date', 'open', 'high', 'low', 'close']]
-    df.sort_values(by='unix', inplace=True)
-    return df
-
-
-def get_normalized_sequences(df, sequence_len, step=1, scaler=None):
-    data = df.to_numpy()
-    numerical_features = data[:, 2:]
-    if scaler is None:
-        scaler = StandardScaler()
-        data[:, 2:] = scaler.fit_transform(numerical_features)
-    else:
-        data[:, 2:] = scaler.transform(numerical_features)
-    sequences = []
+def get_sequences(data: np.array, backward_records, forward_step):
+    X = []
+    y = []
     i = 0
-    while i + sequence_len + 1 <= data.shape[0]:
-        sequences.append(data[i:(i + sequence_len + 1), :])
-        i += step
-    sequences = np.asarray(sequences)
-    X = sequences[:, :-1, :]
-    y = sequences[:, -1, -1]
-    return X, y, scaler
+    while i + forward_step + backward_records < data.shape[0]:
+        X.append(data[i:(i + backward_records), :])
+        y.append(data[i + backward_records + forward_step, -1])
+        i += 1
+    return np.asarray(X).astype(float), np.asarray(y).astype(float)
 
 
 def create_model():
@@ -55,25 +44,42 @@ def create_model():
     return model
 
 
-def main(crypto, currency):
-    train_df = load_data(os.path.dirname(__file__) + '/data/Binance_' + crypto + currency + '_d.csv')
-    X_train, y_train, scaler = get_normalized_sequences(train_df, SEQUENCE_LEN)
-    # Save scaler
-    joblib.dump(scaler, os.path.dirname(__file__) + '/' + crypto + currency + '_scaler.joblib')
-    # Drop timestamps
-    X_train = X_train[:, :, 2:].astype(float)
-    y_train = y_train.astype(float)
+def load_data(crypto, currency, host, db, user, password, backward_records=SEQUENCE_LEN,
+              forward_prediction=FORWARD_PREDICTION, validation_split=0.3):
+    scraper = CryptodatadownloadScraperDB(crypto, currency, host, db, user,
+                                          password, os.path.dirname(__file__) + '/cache')
+    scraper.update_db()
+    records = np.asarray(sorted(scraper.get_all_records().items()))[:, 1]
+    records_arr = np.asarray([[r.open, r.high, r.low, r.close] for r in records]).astype(float)
+    scaler = StandardScaler()
+    normalized_records_arr = scaler.fit_transform(records_arr)
+    train_records = normalized_records_arr[:(1 - int(validation_split * normalized_records_arr.shape[0]))]
+    validation_records = normalized_records_arr[(1 - int(validation_split * normalized_records_arr.shape[0])):]
 
-    val_df = load_data(os.path.dirname(__file__) + '/data/Binance_' + crypto + currency + '_d_val.csv')
-    X_val, y_val, _ = get_normalized_sequences(val_df, SEQUENCE_LEN, 1, scaler)
-    X_val = X_val[:, :, 2:].astype(float)
-    y_val = y_val.astype(float)
+    X_train, y_train = get_sequences(train_records, backward_records, forward_prediction)
+    X_val, y_val = get_sequences(validation_records, backward_records, forward_prediction)
+
+    # Shuffle train data
+    perm = np.random.permutation(X_train.shape[0])
+    X_train = X_train[perm, :, :]
+    y_train = y_train[perm]
+    return X_train, y_train, X_val, y_val, scaler
+
+
+def main(crypto, currency):
+    logging.basicConfig(level=logging.INFO)
+
+    db_params = config()
+    X_train, y_train, X_val, y_val, scaler = load_data(crypto, currency, db_params['host'], db_params['database'],
+                                                       db_params['user'], db_params['password'])
+    joblib.dump(scaler, os.path.dirname(__file__) + '/' + crypto + currency + '_scaler.joblib')
 
     model = create_model()
     model.summary()
     log_dir = os.path.dirname(__file__) + "/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     ckpt_path = os.path.dirname(__file__) + '/logs/checkpoint_' \
-                + crypto + currency + '_1d_' + str(SEQUENCE_LEN) + '_back'
+                + crypto + currency + '_1h_' + str(SEQUENCE_LEN) \
+                + '_back_' + str(FORWARD_PREDICTION) + '_forward'
     model.fit(X_train, y_train, epochs=2000, shuffle=True, validation_data=(X_val, y_val),
               callbacks=[
                   TensorBoard(log_dir, histogram_freq=1),

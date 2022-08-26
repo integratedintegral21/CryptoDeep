@@ -14,7 +14,8 @@ current_dir = os.path.dirname(__file__)
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, os.path.abspath(parent_dir))
 
-SEQUENCE_LEN = 30
+SEQUENCE_LEN = 50
+FORWARD = 12
 
 from NN import inference
 from logic.scraper.web_scraper import CryptodatadownloadScraperDB, config
@@ -113,7 +114,7 @@ def predict_from(latest_record, scraper, crypto, currency):
     logging.debug("Neural network input: {0}".format(sequence))
     logging.info("Predicting...")
     ckpt_path = os.path.dirname(__file__) + '/../NN/logs/checkpoint_' \
-                + crypto + currency + '_1d_' + str(SEQUENCE_LEN) + '_back'
+                + crypto + currency + '_1h_' + str(SEQUENCE_LEN) + '_back_' + str(FORWARD) + '_forward'
     scaler_path = os.path.dirname(__file__) + '/../NN/' + crypto + currency + '_scaler.joblib'
     prediction = inference.main([sequence],
                                 scaler_path,
@@ -136,10 +137,10 @@ def main(crypto, currency):
         logging.info("Updating predictions table...")
         scraper.update_db()
         latest_record = scraper.get_latest_record()
-        prediction_date = latest_record.timestamp + datetime.timedelta(days=1)
+        prediction_date = latest_record.timestamp + datetime.timedelta(hours=FORWARD)
         latest_prediction = get_latest_prediction_timestamp(crypto, currency, db_conn)
 
-        if latest_prediction is not None and latest_prediction <= prediction_date:
+        if latest_prediction is not None and latest_prediction >= prediction_date:
             logging.info("Predictions are up-to-date")
             time.sleep(1)
             continue

@@ -43,6 +43,10 @@ class WebScraperDB(ABC):
     def get_records_between_dates(self, first_timestamp, last_timestamp):
         pass
 
+    @abstractmethod
+    def get_all_records(self):
+        pass
+
 
 class CryptodatadownloadScraperDB(WebScraperDB):
     def __init__(self, crypto, currency, hostname, database, user, password, cache_dir):
@@ -87,9 +91,15 @@ class CryptodatadownloadScraperDB(WebScraperDB):
         if self.__conn is not None:
             self.__conn.close()
 
+    def __parse_record_row(self, row):
+        timestamp = pytz.timezone('UTC').localize(row[1])
+        record = crypto_record.CryptoRecord(timestamp, row[2], row[3], row[4], row[5], self.crypto, self.currency)
+        return {timestamp: record}
+
     def __insert_latest_records(self, df):
         latest_records = []
         latest_df_timestamp = max(df['date'])
+        result = False
         if self.__latest_timestamp is None:
             latest_records = df.to_numpy()[:, [1, 3, 4, 5, 6]]
             self.__latest_timestamp = latest_df_timestamp
@@ -106,11 +116,13 @@ class CryptodatadownloadScraperDB(WebScraperDB):
                                                            "%s, %s) "
                 cur.execute(insert_sql, (date.strftime("%Y-%m-%d %H:%M:%S"), opening, high, low, closing))
             self.__conn.commit()
+            result = True
         except psycopg2.DatabaseError as e:
             logging.error(e)
         finally:
             if cur is not None:
                 cur.close()
+            return result
 
     def update_db(self):
         download_link = 'https://www.cryptodatadownload.com/cdd/Bitstamp_{0}{1}_1h.csv'.format(self.crypto,
@@ -149,9 +161,9 @@ class CryptodatadownloadScraperDB(WebScraperDB):
         df = pd.read_csv(data_file_path)
         df['date'] = df['date'].apply(lambda dt: pytz.timezone('UTC').localize(
             datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')))
-        self.__insert_latest_records(df)
+        if self.__insert_latest_records(df):
+            logging.info("Database updated successfully.")
         os.remove(data_file_path)
-        logging.info("Database updated successfully.")
 
     def get_record_by_date(self, timestamp):
         return self.get_records_between_dates(timestamp, timestamp).get(timestamp)
@@ -172,12 +184,28 @@ class CryptodatadownloadScraperDB(WebScraperDB):
             result = cur.fetchall()
             if result is not None:
                 for r in result:
-                    timestamp = pytz.timezone('UTC').localize(r[1])
-                    record = crypto_record.CryptoRecord(timestamp, r[2], r[3], r[4], r[5], self.crypto, self.currency)
-                    records.update({timestamp: record})
+                    records.update(self.__parse_record_row(r))
         except psycopg2.DatabaseError as e:
             logging.error(e)
         finally:
             if cur is not None:
                 cur.close()
-        return records
+            return records
+
+    def get_all_records(self):
+        cur = None
+        records = dict()
+        try:
+            cur = self.__conn.cursor()
+            table_name = self.crypto + '_' + self.currency + '_records'
+            cur.execute("SELECT * FROM {0}".format(table_name))
+            results = cur.fetchall()
+            if results is not None:
+                for r in results:
+                    records.update(self.__parse_record_row(r))
+        except psycopg2.DatabaseError as e:
+            logging.error(e)
+        finally:
+            if cur is not None:
+                cur.close()
+            return records
