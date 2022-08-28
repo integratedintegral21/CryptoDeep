@@ -55,7 +55,7 @@ router.get('/:cryptoSymbol/:currencySymbol/:n_records', async function (req,
 
 router.get('/:cryptoSymbol/:currencySymbol/:start_date/:end_date', async function (req,
                                                                  res,
-                                                                 next){
+                                                                 next) {
     try {
         const start_date = createDateAsUTC(moment(req.params.start_date, "YYYYMMDDhhmmss").toDate())
         const end_date = createDateAsUTC(moment(req.params.end_date, "YYYYMMDDhhmmss").toDate())
@@ -64,6 +64,25 @@ router.get('/:cryptoSymbol/:currencySymbol/:start_date/:end_date', async functio
         records.map(formatRecord)
         res.send(
             records.sort((a, b) => {
+                if (a.timestamp < b.timestamp) {
+                    return 1
+                }
+                return -1
+            })
+        )
+    } catch (error) {
+        next(error)
+    }
+})
+
+router.get('/pred/:cryptoSymbol/:currencySymbol/all', async function (req,
+                                                                      res,
+                                                                      next) {
+    try {
+        const predictions = (await db.get_all_predictions(req.params.cryptoSymbol, req.params.currencySymbol))
+        predictions.map(formatRecord)
+        res.send(
+            predictions.sort((a, b) => {
                 if (a.timestamp < b.timestamp) {
                     return 1
                 }
