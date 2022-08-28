@@ -15,7 +15,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, os.path.abspath(parent_dir))
 
 SEQUENCE_LEN = 50
-FORWARD = 12
+FORWARD = 24
 
 from NN import inference
 from logic.scraper.web_scraper import CryptodatadownloadScraperDB, config

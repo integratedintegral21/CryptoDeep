@@ -13,7 +13,7 @@ import logging
 from logic.scraper.web_scraper import CryptodatadownloadScraperDB, config
 
 SEQUENCE_LEN = 50
-FORWARD_PREDICTION = 12
+FORWARD_PREDICTION = 24
 
 
 def parse_args():
