@@ -69,3 +69,7 @@ The web server will be launched on port 3000. API details:<br/>
 | pred/<crypto_symbol>/<currency_symbol>/all                       | JSON          | All predictions available for given cryptocurrency                                                            |
 | pred/<crypto_symbol>/<currency_symbol>/<start_date>/<end_date>   | JSON          | Predictions between start_date and end_date. Date format: yyyymmddHHMMSS. UTC timezone assumed.               |
 | pred/<crypto_symbol>/<currency_symbol>/<n>                       | JSON          | Last n predictions for given cryptocurrency                                                                   |
+### Example
+1. Run scripts/predict.py for ETH and GBP.
+2. Run the API.
+3. Open your browser and go to http://localhost:3000/crypto/ETH/GBP/all
