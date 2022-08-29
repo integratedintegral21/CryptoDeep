@@ -25,6 +25,10 @@ router.get('/:cryptoSymbol/:currencySymbol/all', async function (req,
             })
         )
     } catch (error) {
+        // Table not found
+        if (error.code === "42P01") {
+            error.status = 404
+        }
         next(error)
     }
 })
@@ -45,6 +49,10 @@ router.get('/:cryptoSymbol/:currencySymbol/:n_records', async function (req,
             })
         )
     } catch (error) {
+        // Table not found
+        if (error.code === "42P01") {
+            error.status = 404
+        }
         next(error)
     }
 })
@@ -67,6 +75,10 @@ router.get('/:cryptoSymbol/:currencySymbol/:start_date/:end_date', async functio
             })
         )
     } catch (error) {
+        // Table not found
+        if (error.code === "42P01") {
+            error.status = 404
+        }
         next(error)
     }
 })
