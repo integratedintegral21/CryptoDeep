@@ -116,9 +116,9 @@ def predict_from(latest_record, scraper, crypto, currency):
     ckpt_path = os.path.dirname(__file__) + '/../NN/logs/checkpoint_' \
                 + crypto + currency + '_1h_' + str(SEQUENCE_LEN) + '_back_' + str(FORWARD) + '_forward'
     scaler_path = os.path.dirname(__file__) + '/../NN/' + crypto + currency + '_scaler.joblib'
-    prediction = inference.main([sequence],
-                                scaler_path,
-                                ckpt_path)
+    prediction = inference.infer([sequence],
+                                 scaler_path,
+                                 ckpt_path)
     return prediction
 
 
