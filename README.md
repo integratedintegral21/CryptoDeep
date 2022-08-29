@@ -56,3 +56,16 @@ if new data is available in 1s intervals, save it in the database, and predict f
 ├── <crypto_symbol>_<currency_symbol>_records     // Historical data
 ├── <crypto_symbol>_<currency_symbol>_predictions // Predictions
 ```
+### Web API
+Go to web/cryptodeep_api and run <br/>
+`npm start`<br/>
+The web server will be launched on port 3000. API details:<br/>
+
+| Endpoint                                                         | Return format | Description                                                                                                   |
+|------------------------------------------------------------------|---------------|---------------------------------------------------------------------------------------------------------------|
+| crypto/<crypto_symbol>/<currency_symbol>/all                     | JSON          | All available historical data for given cryptocurrency                                                        |
+| crypto/<crypto_symbol>/<currency_symbol>/<start_date>/<end_date> | JSON          | Historical data between start_date and end_date inclusive. Date format: yyyymmddHHMMSS. UTC timezone assumed. |
+| crypto/<crypto_symbol>/<currency_symbol>/<n_records>             | JSON          | Last n_records records for given cryptocurrency                                                               |
+| pred/<crypto_symbol>/<currency_symbol>/all                       | JSON          | All predictions available for given cryptocurrency                                                            |
+| pred/<crypto_symbol>/<currency_symbol>/<start_date>/<end_date>   | JSON          | Predictions between start_date and end_date. Date format: yyyymmddHHMMSS. UTC timezone assumed.               |
+| pred/<crypto_symbol>/<currency_symbol>/<n>                       | JSON          | Last n predictions for given cryptocurrency                                                                   |
