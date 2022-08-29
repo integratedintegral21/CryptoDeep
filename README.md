@@ -26,6 +26,8 @@ Tools for training and using recurrent neural networks for predicting cryptocurr
 - Inference of future cryptocurrencies prices based on historical data
 - Web API for retrieving predicted and historical cryptocurrencies prices
 ## Setup
+### Python dependencies
+Go to project root and run `python3 -m pip install -r requirements.txt`
 ### PostgreSQL database
 Create a database for storing the data. Put the database name with user's credentials in logic/scraper/db_config/database.ini.
 Make sure the user has privileges to create tables in the database.
