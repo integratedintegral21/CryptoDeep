@@ -1,7 +1,6 @@
 from tensorflow.python.keras.layers import LSTM, Dense
 from tensorflow.python.keras.models import Sequential
 from tensorflow.python.keras.callbacks import TensorBoard, EarlyStopping, ModelCheckpoint
-import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import joblib
