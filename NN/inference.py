@@ -1,7 +1,7 @@
-import joblib
-import os
-import numpy as np
 import logging
+
+import joblib
+import numpy as np
 from tensorflow.python.keras.models import load_model
 
 
